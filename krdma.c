@@ -418,11 +418,12 @@ retry:
 				"reconnecting...\n", cb->retry_count);
 		msleep(1000);
 		goto retry;
+	} else {
+		__krdma_free_cb(cb);
+		*conn_cb = NULL;
+		krdma_err("krdma_connect_single failed, ret: %d\n", ret);
+		return ret;
 	}
-	__krdma_free_cb(cb);
-	*conn_cb = NULL;
-	krdma_err("krdma_connect_single failed, ret: %d\n", ret);
-	return ret;
 }
 
 int krdma_listen(const char *host, const char *port, struct krdma_cb **listen_cb)
@@ -1437,8 +1438,9 @@ retry:
 		msleep(1000);
 		goto retry;
 	}
-	goto out_free_cb;
-
+	else {
+		goto out_free_cb;
+	}
 
 rest_client_init:
 	ret = krdma_exch_info_client(cb);
@@ -1446,6 +1448,8 @@ rest_client_init:
 		krdma_err("krdma_exch_info_client failed with ret %d\n", ret);
 		goto out_release_cb;
 	}
+	krdma_debug("%p krdma_rw_init_client succeed\n", cb);
+	return 0;
 
 out_release_cb:
 	krdma_release_cb(cb);
@@ -1490,7 +1494,8 @@ int krdma_rw_init_server(const char *host, const char *port, struct krdma_cb **c
 	ret = krdma_exch_info_server(accept_cb);
 	if (ret < 0)
 		goto out_release_accept_cb;
-	
+
+	krdma_debug("%p krdma_rw_init_server succeed\n", accept_cb);
 	return 0;
 
 out_release_accept_cb:
@@ -1504,6 +1509,7 @@ out_release_listen_cb:
 	rdma_destroy_id(listen_cb->cm_id);
 	__krdma_free_cb(listen_cb);
 exit:
+	krdma_err("krdma_rw_init_server failed, ret: %d\n", ret);
 	return ret;
 }
 
@@ -1562,7 +1568,6 @@ int krdma_read(struct krdma_cb *cb, char *buffer, size_t length) {
 		krdma_err("krdma_poll failed with ret %d.\n", ret);
 		return ret;
 	}
-	krdma_debug("krdma_poll succeed.\n");
 
 	build_krdma_read_output(cb, buffer, length);
 	krdma_debug("krdma_read succeed with buffer = %s, length = %lu.\n", 
@@ -1612,12 +1617,16 @@ int krdma_write(struct krdma_cb *cb, const char *buffer, size_t length) {
 		krdma_err("krdma_poll failed with ret %d.\n", ret);
 		return ret;
 	}
-	krdma_debug("krdma_poll succeed.\n");
 
 	krdma_debug("krdma_write succeed with buffer = %s, length = %lu.\n", 
 		buffer, length);
 	return 0;
 }
+
+
+////////////////////////////////////////////////////////////////////
+/////////////////////////TEST Functions/////////////////////////////
+////////////////////////////////////////////////////////////////////
 
 
 static int sr_client(void *data) {
@@ -1685,17 +1694,38 @@ free_listen_cb:
 }
 
 static int rw_client(void *data) {
-	// struct krdma_cb *cb = NULL;
+	struct krdma_cb *cb = NULL;
 	int ret = 0;
+	
+	char word[20] = "Hello RDMA";
+	char res[20];
+	ret = krdma_rw_init_client("172.16.0.2", "11232", &cb);
+	if (ret < 0)
+		goto exit;
+	krdma_write(cb, word, sizeof(word));
+	krdma_read(cb, res, sizeof(res));
+	krdma_release_cb(cb);
+	__krdma_free_cb(cb);
 
-	// ret = krdma_rw_init_client("")
+exit:
 	return ret;
 }
 
 static int rw_server(void *data) {
-	// struct krdma_cb *conn_cb = NULL;
+	struct krdma_cb *cb = NULL;
 	int ret = 0;
+	imm_t imm;
+	size_t length;
 
+	ret = krdma_rw_init_server("172.16.0.2", "19932", &cb);
+	if (ret < 0)
+		goto exit;
+	while (!kthread_should_stop()) {
+		krdma_poll(cb, &imm, &length, true, 2);
+	}
+	krdma_release_cb(cb);
+	__krdma_free_cb(cb);
+exit:
 	return ret;
 }
 
