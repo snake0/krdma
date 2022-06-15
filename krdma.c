@@ -28,12 +28,12 @@
 
 static bool dbg = 1;
 #define krdma_debug(x, ...) do { 				\
-	if (dbg) printk(KERN_WARNING "%s(): %d "	\
+	if (unlikely(dbg)) printk(KERN_WARNING "%s(): %d "	\
 		x, __func__, __LINE__, ##__VA_ARGS__);	\
 } while (0)
 
 #define krdma_err(x, ...) do { 					\
-	if (dbg) printk(KERN_ERR "%s(): %d "		\
+	printk(KERN_ERR "%s(): %d "		\
 		x, __func__, __LINE__, ##__VA_ARGS__);	\
 } while (0)
 
@@ -335,6 +335,8 @@ static int __krdma_free_mr_sr(struct krdma_cb *cb)
 
 static int __krdma_free_mr_rw(struct krdma_cb *cb) {
 	int ret = 0;
+
+	BUG_ON(!cb->read_write);
 
 	kfree(cb->mr.rw_mr.local_info->buf);
 	kfree(cb->mr.rw_mr.remote_info);
@@ -1448,6 +1450,7 @@ rest_client_init:
 		krdma_err("krdma_exch_info_client failed with ret %d\n", ret);
 		goto out_release_cb;
 	}
+
 	krdma_debug("%p krdma_rw_init_client succeed\n", cb);
 	return 0;
 
@@ -1740,11 +1743,19 @@ module_param(rw, int, S_IRUGO);
 int __init krdma_init(void) {
 	int ret;
 	int (*func[4])(void *data) = {
-		sr_client, sr_server, rw_client, rw_server
+		sr_client,
+		sr_server,
+		rw_client,
+		rw_server
 	};
+	
 	char *name[4] = {
-		"sr_client", "sr_server", "rw_client", "rw_server"
+		"sr_client",
+		"sr_server",
+		"rw_client",
+		"rw_server"
 	};
+
 	int choice = server + 2 * rw;
 
 	krdma_err("server %d\n", server);
