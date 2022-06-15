@@ -1499,6 +1499,8 @@ int krdma_rw_init_server(const char *host, const char *port, struct krdma_cb **c
 		goto out_release_accept_cb;
 
 	krdma_debug("%p krdma_rw_init_server succeed\n", accept_cb);
+	rdma_destroy_id(listen_cb->cm_id);
+	__krdma_free_cb(listen_cb);
 	return 0;
 
 out_release_accept_cb:
@@ -1691,7 +1693,8 @@ free_accept_cb:
 	krdma_release_cb(accept_cb);
 	__krdma_free_cb(accept_cb);
 free_listen_cb:
-	krdma_release_cb(listen_cb);
+	rdma_destroy_id(listen_cb->cm_id);
+	listen_cb->cm_id = NULL;
 	__krdma_free_cb(listen_cb);
 	return ret;
 }
@@ -1748,7 +1751,7 @@ int __init krdma_init(void) {
 		rw_client,
 		rw_server
 	};
-	
+
 	char *name[4] = {
 		"sr_client",
 		"sr_server",
