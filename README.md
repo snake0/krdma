@@ -43,7 +43,7 @@ while (1) {
 }
 ```
 
-## RDMA SEND/RECV APIs
+## RDMA READ/WRITE APIs
 ```c
 /* Called with remote host & port */
 int krdma_rw_init_client(const char *host, const char *port, struct krdma_cb **cbp);
